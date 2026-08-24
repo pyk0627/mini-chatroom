@@ -1,12 +1,83 @@
 #include <iostream>
+#include <sys/socket.h>//提供socket函数
+#include <cstring>//提供memset
+#include <cstdlib>//提供exit,EXIT_FAILURE
+#include <netinet/in.h>//提供sockaddr_in,INADDR_ANY
+#include <apra/inet.h>//提供htons
 using namespace std;
-int server_socket;
 int main()
 {
+	int server_socket;//创建服务端的套接字
 	if((server_socket=socket(AF_INET,SOCK_STREAM,0))==-1)
+	//AF_INET代表地址族使用IPv4
+	//SOCK_STREAM表示面向连接的，可靠的字节流传输，对应TCP
+	//0表示让系统自动选择默认协议
 	{
-		perror("socket: ");//先输出socket：，再输出具体的系统错误
-		exit(-1);//直接终止程序
+		perror("socket");//先输出socket，再输出具体的系统错误
+		exit(EXIT_FAILURE);//直接终止程序
+	}
+
+	struct sockaddr_in server;
+	//该结构体，sockaddr_in，用来保存IPv4的地址信息
+	memset(&server,0,sizeof(server));//先将里面的数据清零
+	server.sin_family=AF_INET;//服务端的地址族使用的是IPv4
+	server.sin_port=htons(10000);
+	//将服务端的端口号设置为10000
+	//端口号用来区分一台主机的不同服务
+	server.sin_addr.s_addr=INADDR_ANY;
+	//internet address any
+	//INADDR_ANY表示这个服务端监听本机的所有IPv4网络接口
+
+	if((bind(server_socket,(struct sockaddr *)&server,sizeof(struct sockaddr_in)))==-1)
+	//bind将刚才创建的socket与刚才编写的ip地址和端口绑定在一起
+	//第一个参数，server_socket表示要绑定的套接字
+	//第二个参数，(struct sockaddr *)&server,
+	//这里的server就是刚才编写的ip地址和端口
+	//(struct sockaddr *)是强制类型转换为通用地址结构体
+	//第三个参数，sizeof(struct sockaddr_in)告诉你传入的地址有多大
+	{
+		perror("bind error");
+		exit(EXIT_FAILURE);
+	}
+
+	//之前的socket相当于创建了一个门
+	//bind相当于给门安装了一个门牌号
+	//listen相当于营业开张
+	if(listen(server_socket,8)==-1)
+	//第一个参数，server_socket，代表哪扇门要开张
+	//第二个参数，表示最多可以几个网络请求在排队
+	{
+		perror("listen error");
+		exit(EXIT_FAILURE);
+	}
+
+	struct socketaddr_in client;
+	//用来保存接待的客户的信息
+	int client_socket;
+	//之前的server_socket是门卫
+	//接待一个客户之后，用一个新的套接字，也就是这个client_socket
+	//来与客户聊天，门卫继续接待客户
+	socklen_t len=sizeof(client);
+	//得到client的大小
+	cout<<"\n\t ======Welcome to the chatroom ======"<<endl;
+
+	int seed=0;
+	while(1)
+	{
+		if((client_socket=accept(server_socket,(struct sockaddr *)&client,&len))==-1)
+		//accept
+		//第一个参数我要从哪个套接字来接受客户端来连接
+		//第二个参数是客户端的结构体地址，当客户端连接成功后，会把客户端信息放到client中
+		//第三个参数，告诉服务端客户端有多大
+		//返回一个套接字，用一个新的套接字来与客户端沟通，门卫继续接待下一个
+		{
+			perror("accept error");
+			exit(EXIT_FAILURE);
+		}
+		seed++;//种子，用来区分，1，2，3
+		thread t(handle_client,client_socket,seed);
+		//thread：线程，用来创建一个子线程
+		//子线程的名字是t
 	}
 	return 0;
 }
