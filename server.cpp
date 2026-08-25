@@ -3,8 +3,16 @@
 #include <cstring>//提供memset
 #include <cstdlib>//提供exit,EXIT_FAILURE
 #include <netinet/in.h>//提供sockaddr_in,INADDR_ANY
-#include <apra/inet.h>//提供htons
+#include <arpa/inet.h>//提供htons
+#define MAX_LEN 200
 using namespace std;
+struct clientinfo
+{
+	int id;
+	string name;
+	int socket;
+	thread th;
+};
 int main()
 {
 	int server_socket;//创建服务端的套接字
@@ -74,10 +82,52 @@ int main()
 			perror("accept error");
 			exit(EXIT_FAILURE);
 		}
-		seed++;//种子，用来区分，1，2，3
+		seed++;//种子，用来区分，第1，2，3...个请求
 		thread t(handle_client,client_socket,seed);
 		//thread：线程，用来创建一个子线程
 		//子线程的名字是t
+		//调用handle_client函数
+		//将client_socket，seed传入handle_client中
+
+		//client和client_socket的区别
+		//client相当于身份证，用来识别是谁
+		//client_socket是通信管道，用来通信
 	}
 	return 0;
+}
+
+void set_name(int id,char name[])
+{
+	for(int i=0;i<clients.size();i++)
+	{
+		if(clients[i].id==id)
+		{
+			client[i].name=string(name);
+		}
+	}
+}
+int broadcast_message(int num,int id)
+{//广播给当前客户端之外的客户
+	for(int i=0;i<clients.size();i++)//遍历已连接的客户端
+	{
+		if(clients[i].id!=id)//不是当前的客户端
+		{
+			send(clients[i].socket,&num,sizeof(num),0);
+		}
+	}
+}
+void handle_client(int client_socket,int id)
+{
+	char name[MAX_LEN],str[MAX_LEN];//MAX_LEN为200
+	//TCP协议约定第一个发送到数据包是字符串
+	recv(client_socket,name,sizeof(name),0);
+	//从client_socket接收数据
+	//存储到name中，
+	//接受sizeof(name)多个数据
+	//0代表默认阻塞模式
+	//一直在这里等待接收数据
+	set_name(id,name);//利用这个函数来保存昵称
+
+	string welcome_message=string(name)+string("已经加入");
+	broadcast_message("#NULL",id);
 }
