@@ -106,6 +106,7 @@ void set_name(int id,char name[])
 		}
 	}
 }
+
 int broadcast_message(int num,int id)
 {//广播给当前客户端之外的客户
 	for(int i=0;i<clients.size();i++)//遍历已连接的客户端
@@ -113,9 +114,31 @@ int broadcast_message(int num,int id)
 		if(clients[i].id!=id)//不是当前的客户端
 		{
 			send(clients[i].socket,&num,sizeof(num),0);
+			//clients[i].socket，要发送的第i个客户端
+			//&num,找到num的地址
+			//发送num大小的数据
+			//0表示普通发送
 		}
 	}
 }
+
+int broadcast_message(string message,int id)
+{
+	char temp[MAX_LEN];
+	//将string类型的message转化为固定长度的temp，char数组类型的
+	//应用层协议
+	strcpy(temp,message.c_str());
+	//.c_str()，返回一个末尾是'\0'的字符数组的指针
+	//strcpy(),将右边的复制到左边
+	for(int i=0;i<clients.size();i++)
+	{
+		if(clients[i].id!=id)
+		{
+			send(clients[i].socket,temp,sizeof(temp),0);
+		}
+	}
+}
+
 void handle_client(int client_socket,int id)
 {
 	char name[MAX_LEN],str[MAX_LEN];//MAX_LEN为200
