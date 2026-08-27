@@ -13,6 +13,7 @@ struct clientinfo
 	int socket;
 	thread th;
 };
+vector<clientinfo> clients;
 int main()
 {
 	int server_socket;//创建服务端的套接字
@@ -152,5 +153,9 @@ void handle_client(int client_socket,int id)
 	set_name(id,name);//利用这个函数来保存昵称
 
 	string welcome_message=string(name)+string("已经加入");
-	broadcast_message("#NULL",id);
+	broadcast_message("!!!!",id);
+	broadcast_message(id,id);//对当前id的其他id发送当前的id
+	broadcast_message(welcome_message,id);
+	//对当前id的其他id发送欢迎消息
+	
 }
