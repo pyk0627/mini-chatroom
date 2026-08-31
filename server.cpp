@@ -4,6 +4,11 @@
 #include <cstdlib>//提供exit,EXIT_FAILURE
 #include <netinet/in.h>//提供sockaddr_in,INADDR_ANY
 #include <arpa/inet.h>//提供htons
+#include <vector>
+#include <string>
+#include <thread>
+#include <mutex>
+#include <unistd.h>
 #define MAX_LEN 200
 using namespace std;
 struct clientinfo
@@ -13,8 +18,15 @@ struct clientinfo
 	int socket;
 	thread th;
 };
+mutex cout_mtx;
+mutex clients_mtx;
 vector<clientinfo> clients;
+void set_name(int id,char name[]);
+int broadcast_message(int num,int id);
+int broadcast_message(string message,int id);
 void shared_print(string str,bool endline=true);
+void end_connection(int id);
+void handle_client(int client_socket,int id);
 int main()
 {
 	int server_socket;//创建服务端的套接字
@@ -61,7 +73,7 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	struct socketaddr_in client;
+	struct sockaddr_in client;
 	//用来保存接待的客户的信息
 	int client_socket;
 	//之前的server_socket是门卫
@@ -94,23 +106,46 @@ int main()
 		//client和client_socket的区别
 		//client相当于身份证，用来识别是谁
 		//client_socket是通信管道，用来通信
+
+		lock_guard<mutex> guard(clients_mtx);
+		clients.push_back({seed,//id
+						string("匿名"),//名字默认为匿名
+						client_socket,//把客户的套接字放进去
+						move(t)//把对应的线程放进去
+					});
+		
 	}
+
+	for(int i=0;i<clients.size();i++)
+	{
+		if(clients[i].th.joinable())
+		//这个线程可加入吗
+		//可加入的意思是
+		//这个线程还在运行吗，而且他还没有被等待过或者被抛弃过
+		//这个员工还能被我管理吗？没有离职或者没有放飞自我
+		{
+			clients[i].th.join();
+		}
+	}
+	close(server_socket);//服务端处理完了所有的客户端，然后关闭服务端
 	return 0;
 }
 
 void set_name(int id,char name[])
 {
+	lock_guard<mutex> guard(clients_mtx);//在遍历clients之前检查一下锁
 	for(int i=0;i<clients.size();i++)
 	{
 		if(clients[i].id==id)
 		{
-			client[i].name=string(name);
+			clients[i].name=string(name);
 		}
 	}
 }
 
-int broadcast_message(int num,int id)
+void broadcast_message(int num,int id)
 {//广播给当前客户端之外的客户
+	lock_guard<mutex> guard(clients_mtx);//在遍历clients之前检查一下锁
 	for(int i=0;i<clients.size();i++)//遍历已连接的客户端
 	{
 		if(clients[i].id!=id)//不是当前的客户端
@@ -124,8 +159,9 @@ int broadcast_message(int num,int id)
 	}
 }
 
-int broadcast_message(string message,int id)
+void broadcast_message(string message,int id)
 {
+	lock_guard<mutex> guard(clients_mtx);//在遍历clients之前检查一下锁
 	char temp[MAX_LEN];
 	//将string类型的message转化为固定长度的temp，char数组类型的
 	//应用层协议
@@ -165,17 +201,42 @@ void shared_print(string str,bool endline=true)
 	if(endline)
 		cout<<endl;
 }
+
+void end_connection(int id)
+{
+	lock_guard<mutex> guard(clients_mtx);
+	for(int i=0;i<clients.size();i++)
+	{
+		if(id==clients[i].id)
+		{
+			//对移除客户端的操作上锁
+			int sock=clients[i].socket;	
+			//暂存要关闭的socket
+			clients[i].th.detach();
+			//让线程在后台独立运行，主程序不再管理
+			clients.erase(clients.begin()+i);
+			close(sock);
+			//关闭套接字
+			break;
+		}
+	}
+}
 void handle_client(int client_socket,int id)
 {
 	char name[MAX_LEN],str[MAX_LEN];//MAX_LEN为200
 	//TCP协议约定第一个发送到数据包是字符串
-	recv(client_socket,name,sizeof(name),0);
+	int bytes_r=recv(client_socket,name,sizeof(name),0);
 	//从client_socket接收数据
 	//存储到name中，
 	//接受sizeof(name)多个数据
 	//0代表默认阻塞模式
 	//一直在这里等待接收数据
-	set_name(id,name);//利用这个函数来保存昵称
+
+	if(byte_r>0)
+		str[bytes_received]='\0';
+	else
+		str[0]='\0';
+	setname(id,name);//利用这个函数来保存昵称
 
 	string welcome_message=string(name)+string("已经 加入");
 	broadcast_message("!!!!",id);
@@ -184,4 +245,54 @@ void handle_client(int client_socket,int id)
 	//对当前id的其他id发送欢迎消息
 	
 	shared_print(welcome_message);//发送到当前服务端的终端上
+
+	while(1)
+	{
+		int bytes_received=int bytes_r=recv(client_socket,str,sizeof(str)-1,0);
+		//从client_socket接受数据
+		//接收到str数组中
+		//sizeof(str)最多接受多少个字节
+		//0代表默认接受模式
+		//recv返回接受的字节数
+		
+    	if(bytes_received>0)
+			str[bytes_received]='\0';
+		else
+			str[0]='\0';
+
+			
+		if(bytes_received<=0)
+		{
+			end_connection(id);
+			return;
+		}
+		if(strcmp(str,"#exit")==0)
+		{
+			//展示离开信息
+			string message=string(name)+string("已经离开");
+			broadcast_message("!!!!",id);
+			//给除了id的其他id发送四个叹号
+			broadcast_message(id,id);
+			//给除了id的其他id发送当前的id
+			broadcast_message(message,id);
+			//给当前id的其他id发送离开信息
+			shared_print(message);
+			//在服务端的终端发送离开信息
+
+			end_connection(id);
+			//使当前id断开连接
+
+			return;
+			//不用处理当前的套接字了
+		}
+
+		broadcast_message(string(name),id);
+		//给其他id发送当前用户的名字
+		broadcast_message(id,id);
+		//给其他id发送当前用户的id
+		broadcast_message(string(str),id);
+		//给其他id发送当前用户发出的信息
+		shared_print(name+":"+str);
+		//在服务器的终端发送当前用户发送的信息
+	}
 }
