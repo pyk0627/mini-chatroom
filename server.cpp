@@ -232,8 +232,8 @@ void handle_client(int client_socket,int id)
 	//0代表默认阻塞模式
 	//一直在这里等待接收数据
 
-	if(byte_r>0)
-		str[bytes_received]='\0';
+	if(bytes_r>0)
+		str[bytes_r]='\0';
 	else
 		str[0]='\0';
 	setname(id,name);//利用这个函数来保存昵称
@@ -248,7 +248,7 @@ void handle_client(int client_socket,int id)
 
 	while(1)
 	{
-		int bytes_received=int bytes_r=recv(client_socket,str,sizeof(str)-1,0);
+		int bytes_received=recv(client_socket,str,sizeof(str)-1,0);
 		//从client_socket接受数据
 		//接收到str数组中
 		//sizeof(str)最多接受多少个字节
