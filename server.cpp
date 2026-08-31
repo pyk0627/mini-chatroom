@@ -14,6 +14,7 @@ struct clientinfo
 	thread th;
 };
 vector<clientinfo> clients;
+void shared_print(string str,bool endline=true);
 int main()
 {
 	int server_socket;//创建服务端的套接字
@@ -75,7 +76,7 @@ int main()
 	{
 		if((client_socket=accept(server_socket,(struct sockaddr *)&client,&len))==-1)
 		//accept
-		//第一个参数我要从哪个套接字来接受客户端来连接
+		//第一个参数我要从哪个套接字来接受客户端的连接
 		//第二个参数是客户端的结构体地址，当客户端连接成功后，会把客户端信息放到client中
 		//第三个参数，告诉服务端客户端有多大
 		//返回一个套接字，用一个新的套接字来与客户端沟通，门卫继续接待下一个
@@ -140,6 +141,30 @@ int broadcast_message(string message,int id)
 	}
 }
 
+void shared_print(string str,bool endline=true)
+{
+	lock_guard<mutex> guard(cout_mtx);
+	//在当前作用域内给cout上锁
+	//保护cout输出，防止内容交错
+
+	//mutex cout_mtx
+	//定义了一个互斥锁变量，变量名是cout_mtx
+
+	//lock_guard，自动管理锁的工具
+	//lock_guard是一个模板类
+	//lcok_guard<mutex>，自动管理的锁是mutex(互斥锁)
+
+	//lock_guard<mutex> guard，这里的guard是用模版类创建的对象名字
+
+	//lock_guard<mutex> guard<cout_mtx>
+	//创建了一个叫guard的锁管理器，用来管理互斥锁，cout_mtx
+	//创建的时候自动给cout_mtx加锁，guard生命周期结束后自动解锁
+
+	cout<<str;
+	//再运行cout这行代码之前先考虑上一样的互斥锁
+	if(endline)
+		cout<<endl;
+}
 void handle_client(int client_socket,int id)
 {
 	char name[MAX_LEN],str[MAX_LEN];//MAX_LEN为200
@@ -152,10 +177,11 @@ void handle_client(int client_socket,int id)
 	//一直在这里等待接收数据
 	set_name(id,name);//利用这个函数来保存昵称
 
-	string welcome_message=string(name)+string("已经加入");
+	string welcome_message=string(name)+string("已经 加入");
 	broadcast_message("!!!!",id);
 	broadcast_message(id,id);//对当前id的其他id发送当前的id
 	broadcast_message(welcome_message,id);
 	//对当前id的其他id发送欢迎消息
 	
+	shared_print(welcome_message);//发送到当前服务端的终端上
 }
